@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { User } from 'src/decorator/coustomize';
+import { ResponseMessage, User } from 'src/decorator/coustomize';
 import { IUser } from 'src/users/users.interface';
 
 @Controller('companies')
@@ -17,8 +17,14 @@ export class CompaniesController {
   }
 
   @Get()
-  findAll() {
-    return this.companiesService.findAll();
+  @ResponseMessage('Get list company')
+  findAll(
+    @Query('page') page: string,
+    @Query('limit') limit: string,
+    @Query() qs: string
+  ) {
+    console.log(">>>>>>>>>page", page);
+    return this.companiesService.findAll(+page, +limit, qs);
   }
 
   @Get(':id')
