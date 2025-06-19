@@ -1,52 +1,126 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto, RegisterUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/user.schema';
-import mongoose, { Model, mongo } from 'mongoose';
+import mongoose, { Model, mongo, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
+import { IUser } from './users.interface';
+import { CompaniesService } from 'src/companies/companies.service';
+import aqp from 'api-query-params';
+
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel('User') private userModel: SoftDeleteModel<UserDocument>,
+    private companyService: CompaniesService
   ) {}
 
-  async getHashPassword(createUserDto: CreateUserDto) {
-    return await bcrypt.hash(createUserDto.password, 10);
+  async getHashPassword(password: string) {
+    return await bcrypt.hash(password, 10);
   }
 
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto, user: IUser) {
     // const hashPassword = await this.getHashPassword(password);
     // let newUser = await this.userModel.create({ email,password:hashPassword, name });
 
     // return newUser;
+    const checkUser = await this.userModel.findOne({ email: createUserDto.email });
+    if(checkUser){
+      throw new BadRequestException('Email already exists');
+    }
     let newUser = await this.userModel.create({
       email: createUserDto.email,
-      password: await this.getHashPassword(createUserDto),
+      password: await this.getHashPassword(createUserDto.password),
       name: createUserDto.name,
       age: createUserDto.age,
+      address: createUserDto.address,
+      gender: createUserDto.gender,
+      role: createUserDto.role,
+      company: createUserDto.company,
+      createdBy: {
+        _id: new Types.ObjectId(user._id),
+        email: user.email,
+      },
+      createdAt: new Date(),
+      
+    });
+    return {
+      _id: newUser._id,
+      createdAt: newUser.createdAt,
+    };
+  }
+
+  async register(registerUserDto: RegisterUserDto) {
+    let newUser = await this.userModel.create({
+      email: registerUserDto.email,
+      password: await this.getHashPassword(registerUserDto.password),
+      name: registerUserDto.name,
+      age: registerUserDto.age,
+      address: registerUserDto.address,
+      gender: registerUserDto.gender,
+      role: "user",
+      createdAt: new Date(),
     });
     return newUser;
   }
 
-  findAll() {
-    return `This action returns all users`;
+  async findAll(page: number, limit: number, qs: string) {
+    const { filter, sort, projection, population } = aqp(qs);
+    delete filter.page;
+    delete filter.limit;
+    let offset = (+page - 1) * (+limit);
+    let defaultLimit = +limit ? +limit : 10;
+    const totalItems = (await this.userModel.find(filter)).length;
+    const totalPages = Math.ceil(totalItems / defaultLimit);
+    const result = await this.userModel.find(filter)
+    .sort(sort as any)
+    .skip(offset)
+    .limit(defaultLimit)
+    .select(projection)
+    .populate(population)
+    .exec();
+    return {
+      meta: {
+        current: page,
+        pageSize: defaultLimit,
+        total: totalItems,
+        pages: totalPages,
+      },
+      result: result,
+    };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  async findOne(id: string) {
+    const user = await this.userModel.findById(id).select('-password');
+    if(!user){
+      throw new BadRequestException('User not found');
+    }
+    return user;
   }
 
   async findOneByUsername(username: string) {
     return await this.userModel.findOne({ email: username });
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto) {
+  async  update(updateUserDto: UpdateUserDto, user: IUser) {
     // return `This action updates a #${id} user`;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      return await this.userModel.updateOne({ _id: id }, {...updateUserDto });
+    const emailCheck = await this.userModel.findOne({ email: updateUserDto.email });
+    
+    if (updateUserDto.company) {
+      const companyCheck = await this.companyService.findOne(updateUserDto.company._id.toString());
+    }
+    
+    if(emailCheck){
+      throw new BadRequestException('Email already exists');
+    }
+    if (mongoose.Types.ObjectId.isValid(updateUserDto._id)) {
+      return await this.userModel.updateOne({ _id: updateUserDto._id }, {...updateUserDto, updatedBy: {
+        _id: new Types.ObjectId(user._id),
+        email: user.email,
+      } });
     }
     throw new BadRequestException('Invalid ID');
   }

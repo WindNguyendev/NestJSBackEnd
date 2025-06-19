@@ -12,7 +12,7 @@ export class CompaniesController {
 
   @Post()
   create(@Body() createCompanyDto: CreateCompanyDto, @User() user: IUser) {
-    console.log(">>>>>>>>>user", user);
+
     return this.companiesService.create(createCompanyDto, user);
   }
 
@@ -29,7 +29,7 @@ export class CompaniesController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.companiesService.findOne(+id);
+    return this.companiesService.findOne(id);
   }
 
   @Patch(':id')
