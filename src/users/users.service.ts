@@ -135,4 +135,8 @@ export class UsersService {
   isValidPassword(password: string, hashPassword: string) {
     return bcrypt.compareSync(password, hashPassword);
   }
+
+  async updateRefreshToken(id: string, refreshToken: string) {
+    return await this.userModel.updateOne({ _id: id }, { refreshToken: refreshToken });
+  }
 }

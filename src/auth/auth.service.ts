@@ -5,6 +5,8 @@ import { IUser } from 'src/users/users.interface';
 import { CreateUserDto, RegisterUserDto } from 'src/users/dto/create-user.dto';
 import * as bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
+import { ConfigService } from '@nestjs/config';
+import ms, { StringValue } from 'ms';
 
 @Injectable()
 export class AuthService {
@@ -12,7 +14,8 @@ export class AuthService {
 
 constructor(
     private usersService: UsersService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private configService: ConfigService
 ) {}
 
 async validateUser(username: string, pass: string): Promise<any> {
@@ -36,8 +39,12 @@ async validateUser(username: string, pass: string): Promise<any> {
       sub: "token login",
       iss: "from server"
     };
+    const refreshToken = this.createRefreshToken(payload);
+    const update = await   this.usersService.updateRefreshToken(user._id, refreshToken);
+    console.log(update);
     return {
       access_token: this.jwtService.sign(payload),
+      refresh_token: refreshToken,
       user: {
         _id,
         email,
@@ -57,7 +64,13 @@ async validateUser(username: string, pass: string): Promise<any> {
       createdAt: new_user.createdAt,
     };
   }
-
+  createRefreshToken = (payload: any) => {
+    const refreshToken = this.jwtService.sign(payload,{
+      secret: this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET'),
+      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRE') || '7d'
+    })
+    return refreshToken;
+}
 
 }
 
