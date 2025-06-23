@@ -1,12 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { IUser } from 'src/users/users.interface';
-import { CreateUserDto, RegisterUserDto } from 'src/users/dto/create-user.dto';
-import * as bcrypt from 'bcryptjs';
-import mongoose from 'mongoose';
+import {RegisterUserDto } from 'src/users/dto/create-user.dto';
 import { ConfigService } from '@nestjs/config';
-import ms, { StringValue } from 'ms';
+import { Response } from 'express';
+import ms  from 'ms';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +28,7 @@ async validateUser(username: string, pass: string): Promise<any> {
     return null;
   }
 
- async login(user: IUser) {
+ async login(user: IUser, res: Response) {
   const {_id, email, role, name} = user;
     const payload = { 
       _id: _id,
@@ -40,11 +39,18 @@ async validateUser(username: string, pass: string): Promise<any> {
       iss: "from server"
     };
     const refreshToken = this.createRefreshToken(payload);
-    const update = await   this.usersService.updateRefreshToken(user._id, refreshToken);
-    console.log(update);
+
+    //save refresh token to database
+    await this.usersService.updateRefreshToken(_id, refreshToken);
+    //set cookie
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: ms((this.configService.get<string>('JWT_REFRESH_EXPIRE') || '7d') as `${number}d`),
+    });
+
     return {
       access_token: this.jwtService.sign(payload),
-      refresh_token: refreshToken,
       user: {
         _id,
         email,
@@ -72,5 +78,34 @@ async validateUser(username: string, pass: string): Promise<any> {
     return refreshToken;
 }
 
-}
+  processNewToken = async (refreshToken: string, res: Response) => {
 
+    try {
+      const decoded = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET'),
+      })
+
+      const user = await this.usersService.findUserByToken(refreshToken);
+      if(!user){
+        throw new UnauthorizedException('Invalid refresh token! Please login again');
+      }
+      const {_id, email, role, name} = user;
+      res.clearCookie('refresh_token');
+      return this.login({
+        _id: _id.toString(),
+        email,
+        role,
+        name
+      }, res);
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token! Please login again');
+  } 
+
+}
+  logout = async (user: IUser, res: Response) => {
+    res.clearCookie('refresh_token');
+    console.log(user._id);
+    await this.usersService.updateRefreshToken(user._id, '');
+    return "ok";
+}
+}

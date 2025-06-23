@@ -19,11 +19,10 @@ export class CompaniesController {
   @Get()
   @ResponseMessage('Get list company')
   findAll(
-    @Query('page') page: string,
-    @Query('limit') limit: string,
+    @Query('current') page: string,
+    @Query('pageSize') limit: string,
     @Query() qs: string
   ) {
-    console.log(">>>>>>>>>page", page);
     return this.companiesService.findAll(+page, +limit, qs);
   }
 
