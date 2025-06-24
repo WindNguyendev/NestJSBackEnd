@@ -5,9 +5,10 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { TransformInterceptor } from './core/transform.interceptor';
 import cookieParser from 'cookie-parser';
-
+import { join } from 'path';
+import { NestExpressApplication } from '@nestjs/platform-express';
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const configService = app.get(ConfigService);
   const reflector = app.get(Reflector);
@@ -17,11 +18,16 @@ async function bootstrap() {
   const port = configService.get('PORT') ?? 3000;
   app.useGlobalInterceptors(new TransformInterceptor(reflector));
 
+  app.useStaticAssets(join(__dirname, '..', 'public'));
+  app.setBaseViewsDir([join(__dirname, '..', 'views')]);
+  app.setViewEngine('ejs');
+
   app.useGlobalPipes(new ValidationPipe());
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     preflightContinue: false,
+    credentials: true,
   });
   // config versioning
   app.setGlobalPrefix('api');

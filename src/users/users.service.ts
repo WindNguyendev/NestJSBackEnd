@@ -113,9 +113,6 @@ export class UsersService {
       const companyCheck = await this.companyService.findOne(updateUserDto.company._id.toString());
     }
     
-    if(emailCheck){
-      throw new BadRequestException('Email already exists');
-    }
     if (mongoose.Types.ObjectId.isValid(updateUserDto._id)) {
       return await this.userModel.updateOne({ _id: updateUserDto._id }, {...updateUserDto, updatedBy: {
         _id: new Types.ObjectId(user._id),
