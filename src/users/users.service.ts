@@ -2,8 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateUserDto, RegisterUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { User, UserDocument } from './schemas/user.schema';
-import mongoose, { Model, mongo, Types } from 'mongoose';
+import { UserDocument } from './schemas/user.schema';
+import mongoose, { Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
 import { IUser } from './users.interface';
@@ -15,7 +15,7 @@ import aqp from 'api-query-params';
 export class UsersService {
   constructor(
     @InjectModel('User') private userModel: SoftDeleteModel<UserDocument>,
-    private companyService: CompaniesService
+    private companyService: CompaniesService,
   ) {}
 
   async getHashPassword(password: string) {
@@ -27,11 +27,13 @@ export class UsersService {
     // let newUser = await this.userModel.create({ email,password:hashPassword, name });
 
     // return newUser;
-    const checkUser = await this.userModel.findOne({ email: createUserDto.email });
-    if(checkUser){
+    const checkUser = await this.userModel.findOne({
+      email: createUserDto.email,
+    });
+    if (checkUser) {
       throw new BadRequestException('Email already exists');
     }
-    let newUser = await this.userModel.create({
+    const newUser = await this.userModel.create({
       email: createUserDto.email,
       password: await this.getHashPassword(createUserDto.password),
       name: createUserDto.name,
@@ -45,7 +47,6 @@ export class UsersService {
         email: user.email,
       },
       createdAt: new Date(),
-      
     });
     return {
       _id: newUser._id,
@@ -54,14 +55,22 @@ export class UsersService {
   }
 
   async register(registerUserDto: RegisterUserDto) {
-    let newUser = await this.userModel.create({
+    // Đếm số user chưa bị soft delete (plugin đặt isDeleted=true khi xoá)
+    const userCount = await this.userModel.countDocuments({
+      isDeleted: { $ne: true },
+    });
+    const role = userCount === 0 ? 'admin' : 'user';
+    
+    console.log(`User count: ${userCount}, Role assigned: ${role}`);
+    
+    const newUser = await this.userModel.create({
       email: registerUserDto.email,
       password: await this.getHashPassword(registerUserDto.password),
       name: registerUserDto.name,
       age: registerUserDto.age,
       address: registerUserDto.address,
       gender: registerUserDto.gender,
-      role: "user",
+      role: role,
       createdAt: new Date(),
     });
     return newUser;
@@ -71,17 +80,18 @@ export class UsersService {
     const { filter, sort, projection, population } = aqp(qs);
     delete filter.current;
     delete filter.pageSize;
-    let offset = (+page - 1) * (+limit);
-    let defaultLimit = +limit ? +limit : 10;
+    const offset = (+page - 1) * +limit;
+    const defaultLimit = +limit ? +limit : 10;
     const totalItems = (await this.userModel.find(filter)).length;
     const totalPages = Math.ceil(totalItems / defaultLimit);
-    const result = await this.userModel.find(filter)
-    .sort(sort as any)
-    .skip(offset)
-    .limit(defaultLimit)
-    .select(projection)
-    .populate(population)
-    .exec();
+    const result = await this.userModel
+      .find(filter)
+      .sort(sort as any)
+      .skip(offset)
+      .limit(defaultLimit)
+      .select(projection)
+      .populate(population)
+      .exec();
     return {
       meta: {
         current: page,
